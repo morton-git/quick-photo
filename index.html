@@ -105,6 +105,20 @@
             background-color: #e0e0e0;
             border-color: #4a90e2;
         }
+        #add-text-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+        #add-text-btn:hover {
+            background-color: #0056b3;
+        }
 
         #download-buttons {
             display: flex;
@@ -132,18 +146,43 @@
         #download-buttons button.delete-btn:hover {
             background-color: #c82333;
         }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .action-buttons button {
+            background-color: #6c757d;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+        .action-buttons button:hover {
+            background-color: #5a6268;
+        }
+
+        /* 新增訊息框的樣式 */
         #message-box {
             position: fixed;
-            bottom: 20px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.75);
             color: white;
-            padding: 10px 20px;
+            padding: 15px 30px;
             border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
             z-index: 1000;
             display: none;
-            text-align: center;
+            transition: opacity 0.3s ease;
+            opacity: 0;
         }
     </style>
 </head>
@@ -185,6 +224,14 @@
                 </select>
             </label>
             <label>不透明度: <input type="range" id="text-opacity" min="0" max="100" value="100"></label>
+            <button id="add-text-btn">新增文字</button>
+        </div>
+
+        <div class="action-buttons">
+            <button id="undo-btn">復原</button>
+            <button id="redo-btn">重做</button>
+            <button id="bring-forward-btn">上移一層</button>
+            <button id="send-backward-btn">下移一層</button>
         </div>
 
         <div id="editor-area">
@@ -220,10 +267,15 @@
         const isVerticalCheckbox = document.getElementById('is-vertical');
         const fontFamilySelect = document.getElementById('font-family');
         const textOpacityInput = document.getElementById('text-opacity');
+        const addTextBtn = document.getElementById('add-text-btn');
         const downloadPngBtn = document.getElementById('download-png');
         const downloadJpgBtn = document.getElementById('download-jpg');
         const downloadPdfBtn = document.getElementById('download-pdf');
         const deleteBtn = document.getElementById('delete-btn');
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        const bringForwardBtn = document.getElementById('bring-forward-btn');
+        const sendBackwardBtn = document.getElementById('send-backward-btn');
         const editorArea = document.getElementById('editor-area');
         const messageBox = document.getElementById('message-box');
 
@@ -234,12 +286,35 @@
         let startX, startY;
         let offsetX, offsetY;
 
+        // 歷史紀錄陣列
+        let history = [];
+        let historyIndex = -1;
+        const maxHistory = 20;
+
+        // 儲存當前狀態到歷史紀錄
+        function saveState() {
+            // 如果歷史紀錄超過上限，移除最舊的
+            if (historyIndex < history.length - 1) {
+                history = history.slice(0, historyIndex + 1);
+            }
+            if (history.length > maxHistory) {
+                history.shift();
+                historyIndex--;
+            }
+            history.push(JSON.stringify(textObjects));
+            historyIndex++;
+        }
+
         // 訊息顯示函式
         function showMessage(message, duration = 3000) {
             messageBox.textContent = message;
             messageBox.style.display = 'block';
+            messageBox.style.opacity = '1';
             setTimeout(() => {
-                messageBox.style.display = 'none';
+                messageBox.style.opacity = '0';
+                setTimeout(() => {
+                    messageBox.style.display = 'none';
+                }, 300); // 等待淡出動畫完成再隱藏
             }, duration);
         }
         
@@ -353,6 +428,11 @@
                     const img = new Image();
                     img.onload = function() {
                         backgroundImage = img;
+                        textObjects = [];
+                        selectedText = null;
+                        history = [];
+                        historyIndex = -1;
+                        saveState(); // 載入圖片後儲存初始狀態
                         draw();
                     };
                     img.src = event.target.result;
@@ -380,6 +460,11 @@
                     const img = new Image();
                     img.onload = function() {
                         backgroundImage = img;
+                        textObjects = [];
+                        selectedText = null;
+                        history = [];
+                        historyIndex = -1;
+                        saveState(); // 載入圖片後儲存初始狀態
                         draw();
                         showMessage('PDF載入完成，已轉換為圖片');
                     };
@@ -391,6 +476,34 @@
             } else {
                 showMessage('不支援的檔案格式');
             }
+        });
+        
+        // 點擊新增文字按鈕
+        addTextBtn.addEventListener('click', () => {
+            if (!backgroundImage) {
+                showMessage('請先上傳圖片');
+                return;
+            }
+            // 在畫布中央新增文字
+            const newTextObject = {
+                text: '請在此輸入文字',
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                size: parseInt(textSizeInput.value),
+                color: textColorInput.value,
+                strokeSize: parseInt(strokeSizeInput.value),
+                strokeColor: strokeColorInput.value,
+                shadowEnabled: shadowCheckbox.checked,
+                isVertical: isVerticalCheckbox.checked,
+                textAlign: document.querySelector('input[name="text-align"]:checked').value,
+                fontFamily: fontFamilySelect.value,
+                opacity: parseInt(textOpacityInput.value) / 100
+            };
+            textObjects.push(newTextObject);
+            selectedText = newTextObject;
+            textInput.value = selectedText.text;
+            saveState();
+            draw();
         });
 
         // 處理 Canvas 上的滑鼠點擊與拖曳
@@ -404,8 +517,9 @@
             startY = (e.clientY - rect.top) * scaleY;
 
             let foundText = false;
-            selectedText = null;
-            textObjects.forEach(obj => {
+            // 反向迴圈，確保點選到最上層的文字
+            for (let i = textObjects.length - 1; i >= 0; i--) {
+                const obj = textObjects[i];
                 ctx.font = `${obj.size}px ${obj.fontFamily}`;
                 let width, height;
                 if (obj.isVertical) {
@@ -417,7 +531,18 @@
                     height = obj.size;
                 }
                 
-                if (startX >= obj.x && startX <= obj.x + width &&
+                // 調整點擊範圍以考慮對齊方式
+                let hitX = obj.x;
+                if (!obj.isVertical) {
+                    const textMetrics = ctx.measureText(obj.text);
+                    if (obj.textAlign === 'center') {
+                        hitX -= textMetrics.width / 2;
+                    } else if (obj.textAlign === 'right') {
+                        hitX -= textMetrics.width;
+                    }
+                }
+
+                if (startX >= hitX && startX <= hitX + width &&
                     startY >= obj.y && startY <= obj.y + height) {
                     selectedText = obj;
                     isDragging = true;
@@ -434,28 +559,13 @@
                     textOpacityInput.value = obj.opacity * 100;
                     document.querySelector(`input[name="text-align"][value="${obj.textAlign}"]`).checked = true;
                     foundText = true;
+                    break; // 找到後就跳出迴圈
                 }
-            });
+            }
 
+            // 如果沒有點擊到任何文字，取消選取
             if (!foundText) {
-                // 如果沒有點擊到文字，新增一個新的文字
-                const newTextObject = {
-                    text: textInput.value || '新文字',
-                    x: startX,
-                    y: startY,
-                    size: parseInt(textSizeInput.value),
-                    color: textColorInput.value,
-                    strokeSize: parseInt(strokeSizeInput.value),
-                    strokeColor: strokeColorInput.value,
-                    shadowEnabled: shadowCheckbox.checked,
-                    isVertical: isVerticalCheckbox.checked,
-                    textAlign: document.querySelector('input[name="text-align"]:checked').value,
-                    fontFamily: fontFamilySelect.value,
-                    opacity: parseInt(textOpacityInput.value) / 100
-                };
-                textObjects.push(newTextObject);
-                selectedText = newTextObject;
-                textInput.value = selectedText.text;
+                selectedText = null;
             }
             draw();
         });
@@ -475,81 +585,42 @@
         });
 
         canvas.addEventListener('mouseup', () => {
-            isDragging = false;
+            if (isDragging) {
+                isDragging = false;
+                saveState();
+            }
         });
 
         // 處理文字輸入與樣式變更
-        textInput.addEventListener('input', (e) => {
+        function handleStyleChange() {
             if (selectedText) {
-                selectedText.text = e.target.value;
+                selectedText.text = textInput.value;
+                selectedText.size = parseInt(textSizeInput.value);
+                selectedText.color = textColorInput.value;
+                selectedText.strokeSize = parseInt(strokeSizeInput.value);
+                selectedText.strokeColor = strokeColorInput.value;
+                selectedText.shadowEnabled = shadowCheckbox.checked;
+                selectedText.isVertical = isVerticalCheckbox.checked;
+                selectedText.textAlign = document.querySelector('input[name="text-align"]:checked').value;
+                selectedText.fontFamily = fontFamilySelect.value;
+                selectedText.opacity = parseInt(textOpacityInput.value) / 100;
                 draw();
+                // 為了避免每輸入一個字就儲存一次，我們只在mouseup時儲存
+                // 這裡的改變只會即時反應在畫面上
             }
-        });
-
-        textSizeInput.addEventListener('input', (e) => {
-            if (selectedText) {
-                selectedText.size = parseInt(e.target.value);
-                draw();
-            }
-        });
-
-        textColorInput.addEventListener('input', (e) => {
-            if (selectedText) {
-                selectedText.color = e.target.value;
-                draw();
-            }
-        });
-
-        strokeSizeInput.addEventListener('input', (e) => {
-            if (selectedText) {
-                selectedText.strokeSize = parseInt(e.target.value);
-                draw();
-            }
-        });
-
-        strokeColorInput.addEventListener('input', (e) => {
-            if (selectedText) {
-                selectedText.strokeColor = e.target.value;
-                draw();
-            }
-        });
-
-        shadowCheckbox.addEventListener('change', (e) => {
-            if (selectedText) {
-                selectedText.shadowEnabled = e.target.checked;
-                draw();
-            }
-        });
-        
-        isVerticalCheckbox.addEventListener('change', (e) => {
-            if (selectedText) {
-                selectedText.isVertical = e.target.checked;
-                draw();
-            }
-        });
-
+        }
+        textInput.addEventListener('input', handleStyleChange);
+        textSizeInput.addEventListener('input', handleStyleChange);
+        textColorInput.addEventListener('input', handleStyleChange);
+        strokeSizeInput.addEventListener('input', handleStyleChange);
+        strokeColorInput.addEventListener('input', handleStyleChange);
+        shadowCheckbox.addEventListener('change', handleStyleChange);
+        isVerticalCheckbox.addEventListener('change', handleStyleChange);
         document.querySelectorAll('input[name="text-align"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (selectedText) {
-                    selectedText.textAlign = e.target.value;
-                    draw();
-                }
-            });
+            radio.addEventListener('change', handleStyleChange);
         });
-
-        fontFamilySelect.addEventListener('change', (e) => {
-            if (selectedText) {
-                selectedText.fontFamily = e.target.value;
-                draw();
-            }
-        });
-
-        textOpacityInput.addEventListener('input', (e) => {
-            if (selectedText) {
-                selectedText.opacity = parseInt(e.target.value) / 100;
-                draw();
-            }
-        });
+        fontFamilySelect.addEventListener('change', handleStyleChange);
+        textOpacityInput.addEventListener('input', handleStyleChange);
         
         // 刪除選取的文字
         deleteBtn.addEventListener('click', () => {
@@ -561,8 +632,59 @@
             textObjects = textObjects.filter(obj => obj !== selectedText);
             selectedText = null;
             textInput.value = '';
+            saveState();
             draw();
             showMessage('文字已刪除');
+        });
+
+        // 新增復原/重做功能
+        undoBtn.addEventListener('click', () => {
+            if (historyIndex > 0) {
+                historyIndex--;
+                textObjects = JSON.parse(history[historyIndex]);
+                selectedText = null;
+                draw();
+            }
+        });
+
+        redoBtn.addEventListener('click', () => {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                textObjects = JSON.parse(history[historyIndex]);
+                selectedText = null;
+                draw();
+            }
+        });
+
+        // 新增圖層管理功能
+        bringForwardBtn.addEventListener('click', () => {
+            if (selectedText) {
+                const index = textObjects.indexOf(selectedText);
+                if (index < textObjects.length - 1) {
+                    // 將選取的文字移到陣列的後面
+                    const [obj] = textObjects.splice(index, 1);
+                    textObjects.splice(index + 1, 0, obj);
+                    saveState();
+                    draw();
+                }
+            } else {
+                showMessage('請先點擊選擇一個文字');
+            }
+        });
+
+        sendBackwardBtn.addEventListener('click', () => {
+            if (selectedText) {
+                const index = textObjects.indexOf(selectedText);
+                if (index > 0) {
+                    // 將選取的文字移到陣列的前面
+                    const [obj] = textObjects.splice(index, 1);
+                    textObjects.splice(index - 1, 0, obj);
+                    saveState();
+                    draw();
+                }
+            } else {
+                showMessage('請先點擊選擇一個文字');
+            }
         });
 
         // 下載功能
@@ -603,6 +725,9 @@
 
         // 初始化畫布
         draw();
+        // 為了避免初始狀態沒有被保存，在腳本載入時就儲存一次
+        // 但因為還沒有圖片，所以這個狀態是空的
+        // 真正的初始狀態會在圖片載入後儲存
     </script>
 </body>
 </html>
