@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簡易圖片文字編輯器</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 90%;
+            max-width: 1200px;
+        }
+        #file-upload-container {
+            text-align: center;
+        }
+        #image-upload {
+            display: none;
+        }
+        .custom-upload-btn {
+            background-color: #4a90e2;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+        .custom-upload-btn:hover {
+            background-color: #357bd8;
+        }
+        #editor-area {
+            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            min-height: 400px;
+            background-color: #fafafa;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            cursor: text;
+        }
+        #controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+        #text-input {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+            width: 250px;
+        }
+        #controls label, #controls select {
+            font-weight: bold;
+        }
+        #text-size, #text-color, #stroke-size, #stroke-color, #text-opacity, #font-family {
+            cursor: pointer;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .alignment-buttons label {
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .alignment-buttons input[type="radio"] {
+            display: none;
+        }
+        .alignment-buttons input[type="radio"]:checked + label {
+            background-color: #e0e0e0;
+            border-color: #4a90e2;
+        }
+
+        #download-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+        #download-buttons button {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+        #download-buttons button.delete-btn {
+            background-color: #dc3545;
+        }
+        #download-buttons button:hover {
+            background-color: #218838;
+        }
+        #download-buttons button.delete-btn:hover {
+            background-color: #c82333;
+        }
+        #message-box {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>簡易圖片文字編輯器</h1>
+
+        <div id="file-upload-container">
+            <input type="file" id="image-upload" accept=".jpg,.jpeg,.png,.pdf">
+            <label for="image-upload" class="custom-upload-btn">上傳圖片或PDF</label>
+        </div>
+
+        <div id="controls">
+            <input type="text" id="text-input" placeholder="請在此輸入文字">
+            <label>大小: <input type="range" id="text-size" min="20" max="200" value="48"></label>
+            <label>顏色: <input type="color" id="text-color" value="#000000"></label>
+            
+            <label>描邊: <input type="range" id="stroke-size" min="0" max="10" value="0"></label>
+            <label>描邊色: <input type="color" id="stroke-color" value="#ffffff"></label>
+            <label><input type="checkbox" id="shadow-enabled">陰影</label>
+            
+            <div class="alignment-buttons">
+                <input type="radio" id="align-left" name="text-align" value="left" checked>
+                <label for="align-left">左</label>
+                <input type="radio" id="align-center" name="text-align" value="center">
+                <label for="align-center">中</label>
+                <input type="radio" id="align-right" name="text-align" value="right">
+                <label for="align-right">右</label>
+            </div>
+            <label><input type="checkbox" id="is-vertical">直式書寫</label>
+            
+            <label>字型:
+                <select id="font-family">
+                    <option value="Noto Sans TC, sans-serif" style="font-family: 'Noto Sans TC', sans-serif;">思源黑體 (預設)</option>
+                    <option value="標楷體, serif" style="font-family: '標楷體', serif;">標楷體</option>
+                    <option value="微軟正黑體, sans-serif" style="font-family: '微軟正黑體', sans-serif;">微軟正黑體</option>
+                    <option value="Arial, sans-serif" style="font-family: Arial, sans-serif;">Arial</option>
+                    <option value="Times New Roman, serif" style="font-family: 'Times New Roman', serif;">Times New Roman</option>
+                </select>
+            </label>
+            <label>不透明度: <input type="range" id="text-opacity" min="0" max="100" value="100"></label>
+        </div>
+
+        <div id="editor-area">
+            <canvas id="editor-canvas"></canvas>
+        </div>
+
+        <div id="download-buttons">
+            <button id="download-png">下載 PNG</button>
+            <button id="download-jpg">下載 JPG</button>
+            <button id="download-pdf">下載 PDF</button>
+            <button id="delete-btn" class="delete-btn">刪除文字</button>
+        </div>
+    </div>
+    
+    <div id="message-box"></div>
+
+    <!-- 引入 jsPDF 和 pdf.js 函式庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // 設定 pdf.js worker 的路徑
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const canvas = document.getElementById('editor-canvas');
+        const ctx = canvas.getContext('2d');
+        const imageUpload = document.getElementById('image-upload');
+        const textInput = document.getElementById('text-input');
+        const textSizeInput = document.getElementById('text-size');
+        const textColorInput = document.getElementById('text-color');
+        const strokeSizeInput = document.getElementById('stroke-size');
+        const strokeColorInput = document.getElementById('stroke-color');
+        const shadowCheckbox = document.getElementById('shadow-enabled');
+        const isVerticalCheckbox = document.getElementById('is-vertical');
+        const fontFamilySelect = document.getElementById('font-family');
+        const textOpacityInput = document.getElementById('text-opacity');
+        const downloadPngBtn = document.getElementById('download-png');
+        const downloadJpgBtn = document.getElementById('download-jpg');
+        const downloadPdfBtn = document.getElementById('download-pdf');
+        const deleteBtn = document.getElementById('delete-btn');
+        const editorArea = document.getElementById('editor-area');
+        const messageBox = document.getElementById('message-box');
+
+        let backgroundImage = null;
+        let textObjects = [];
+        let selectedText = null;
+        let isDragging = false;
+        let startX, startY;
+        let offsetX, offsetY;
+
+        // 訊息顯示函式
+        function showMessage(message, duration = 3000) {
+            messageBox.textContent = message;
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, duration);
+        }
+        
+        // 繪製所有內容到 Canvas 上
+        function draw() {
+            if (!backgroundImage) {
+                // 如果沒有圖片，設定一個預設的畫布大小
+                canvas.width = editorArea.clientWidth;
+                canvas.height = 400;
+                ctx.fillStyle = '#fafafa';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ccc';
+                ctx.textAlign = 'center';
+                ctx.font = '24px Noto Sans TC';
+                ctx.fillText('請上傳圖片或PDF檔案', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            // 調整 Canvas 尺寸以符合圖片
+            canvas.width = backgroundImage.width;
+            canvas.height = backgroundImage.height;
+            
+            // 繪製背景圖片
+            ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+
+            // 繪製所有文字物件
+            textObjects.forEach(obj => {
+                ctx.font = `${obj.size}px ${obj.fontFamily}`;
+                ctx.textAlign = obj.isVertical ? 'left' : obj.textAlign;
+                ctx.textBaseline = 'top';
+                ctx.globalAlpha = obj.opacity;
+
+                // 設定陰影
+                if (obj.shadowEnabled) {
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                    ctx.shadowBlur = 5;
+                    ctx.shadowOffsetX = 2;
+                    ctx.shadowOffsetY = 2;
+                }
+
+                // 計算文字繪製的起始位置
+                let drawX = obj.x;
+                if (!obj.isVertical) {
+                    const textMetrics = ctx.measureText(obj.text);
+                    if (obj.textAlign === 'center') {
+                        drawX -= textMetrics.width / 2;
+                    } else if (obj.textAlign === 'right') {
+                        drawX -= textMetrics.width;
+                    }
+                }
+
+                // 繪製描邊
+                if (obj.strokeSize > 0) {
+                    ctx.strokeStyle = obj.strokeColor;
+                    ctx.lineWidth = obj.strokeSize;
+                    if (obj.isVertical) {
+                        for (let i = 0; i < obj.text.length; i++) {
+                            ctx.strokeText(obj.text[i], drawX, obj.y + i * obj.size);
+                        }
+                    } else {
+                        ctx.strokeText(obj.text, drawX, obj.y);
+                    }
+                }
+
+                // 繪製文字
+                ctx.fillStyle = obj.color;
+                if (obj.isVertical) {
+                    for (let i = 0; i < obj.text.length; i++) {
+                        ctx.fillText(obj.text[i], drawX, obj.y + i * obj.size);
+                    }
+                } else {
+                    ctx.fillText(obj.text, drawX, obj.y);
+                }
+
+                // 重設陰影和不透明度，避免影響其他物件
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.globalAlpha = 1;
+
+                // 如果是選中的文字，繪製一個邊框
+                if (obj === selectedText) {
+                    let width, height;
+                    if (obj.isVertical) {
+                        width = obj.size;
+                        height = obj.text.length * obj.size;
+                    } else {
+                        const metrics = ctx.measureText(obj.text);
+                        width = metrics.width;
+                        height = obj.size;
+                    }
+                    ctx.strokeStyle = '#4a90e2';
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeRect(obj.x, obj.y, width, height);
+                    ctx.setLineDash([]);
+                }
+            });
+        }
+
+        // 處理圖片上傳
+        imageUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            const fileType = file.type;
+
+            if (fileType.includes('image')) {
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        backgroundImage = img;
+                        draw();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else if (fileType === 'application/pdf') {
+                showMessage('正在載入PDF...');
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const pdfPage = await pdfDoc.getPage(1); // 只處理第一頁
+
+                    const viewport = pdfPage.getViewport({ scale: 2 });
+                    const pdfCanvas = document.createElement('canvas');
+                    const pdfContext = pdfCanvas.getContext('2d');
+                    pdfCanvas.width = viewport.width;
+                    pdfCanvas.height = viewport.height;
+                    
+                    const renderContext = {
+                        canvasContext: pdfContext,
+                        viewport: viewport,
+                    };
+                    await pdfPage.render(renderContext).promise;
+
+                    const img = new Image();
+                    img.onload = function() {
+                        backgroundImage = img;
+                        draw();
+                        showMessage('PDF載入完成，已轉換為圖片');
+                    };
+                    img.src = pdfCanvas.toDataURL('image/png');
+                } catch (error) {
+                    console.error('Failed to render PDF:', error);
+                    showMessage('無法載入PDF檔案');
+                }
+            } else {
+                showMessage('不支援的檔案格式');
+            }
+        });
+
+        // 處理 Canvas 上的滑鼠點擊與拖曳
+        canvas.addEventListener('mousedown', (e) => {
+            if (!backgroundImage) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            startX = (e.clientX - rect.left) * scaleX;
+            startY = (e.clientY - rect.top) * scaleY;
+
+            let foundText = false;
+            selectedText = null;
+            textObjects.forEach(obj => {
+                ctx.font = `${obj.size}px ${obj.fontFamily}`;
+                let width, height;
+                if (obj.isVertical) {
+                    width = obj.size;
+                    height = obj.text.length * obj.size;
+                } else {
+                    const metrics = ctx.measureText(obj.text);
+                    width = metrics.width;
+                    height = obj.size;
+                }
+                
+                if (startX >= obj.x && startX <= obj.x + width &&
+                    startY >= obj.y && startY <= obj.y + height) {
+                    selectedText = obj;
+                    isDragging = true;
+                    offsetX = startX - obj.x;
+                    offsetY = startY - obj.y;
+                    textInput.value = obj.text;
+                    textSizeInput.value = obj.size;
+                    textColorInput.value = obj.color;
+                    strokeSizeInput.value = obj.strokeSize;
+                    strokeColorInput.value = obj.strokeColor;
+                    shadowCheckbox.checked = obj.shadowEnabled;
+                    isVerticalCheckbox.checked = obj.isVertical;
+                    fontFamilySelect.value = obj.fontFamily;
+                    textOpacityInput.value = obj.opacity * 100;
+                    document.querySelector(`input[name="text-align"][value="${obj.textAlign}"]`).checked = true;
+                    foundText = true;
+                }
+            });
+
+            if (!foundText) {
+                // 如果沒有點擊到文字，新增一個新的文字
+                const newTextObject = {
+                    text: textInput.value || '新文字',
+                    x: startX,
+                    y: startY,
+                    size: parseInt(textSizeInput.value),
+                    color: textColorInput.value,
+                    strokeSize: parseInt(strokeSizeInput.value),
+                    strokeColor: strokeColorInput.value,
+                    shadowEnabled: shadowCheckbox.checked,
+                    isVertical: isVerticalCheckbox.checked,
+                    textAlign: document.querySelector('input[name="text-align"]:checked').value,
+                    fontFamily: fontFamilySelect.value,
+                    opacity: parseInt(textOpacityInput.value) / 100
+                };
+                textObjects.push(newTextObject);
+                selectedText = newTextObject;
+                textInput.value = selectedText.text;
+            }
+            draw();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging || !selectedText) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+
+            selectedText.x = mouseX - offsetX;
+            selectedText.y = mouseY - offsetY;
+            draw();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // 處理文字輸入與樣式變更
+        textInput.addEventListener('input', (e) => {
+            if (selectedText) {
+                selectedText.text = e.target.value;
+                draw();
+            }
+        });
+
+        textSizeInput.addEventListener('input', (e) => {
+            if (selectedText) {
+                selectedText.size = parseInt(e.target.value);
+                draw();
+            }
+        });
+
+        textColorInput.addEventListener('input', (e) => {
+            if (selectedText) {
+                selectedText.color = e.target.value;
+                draw();
+            }
+        });
+
+        strokeSizeInput.addEventListener('input', (e) => {
+            if (selectedText) {
+                selectedText.strokeSize = parseInt(e.target.value);
+                draw();
+            }
+        });
+
+        strokeColorInput.addEventListener('input', (e) => {
+            if (selectedText) {
+                selectedText.strokeColor = e.target.value;
+                draw();
+            }
+        });
+
+        shadowCheckbox.addEventListener('change', (e) => {
+            if (selectedText) {
+                selectedText.shadowEnabled = e.target.checked;
+                draw();
+            }
+        });
+        
+        isVerticalCheckbox.addEventListener('change', (e) => {
+            if (selectedText) {
+                selectedText.isVertical = e.target.checked;
+                draw();
+            }
+        });
+
+        document.querySelectorAll('input[name="text-align"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (selectedText) {
+                    selectedText.textAlign = e.target.value;
+                    draw();
+                }
+            });
+        });
+
+        fontFamilySelect.addEventListener('change', (e) => {
+            if (selectedText) {
+                selectedText.fontFamily = e.target.value;
+                draw();
+            }
+        });
+
+        textOpacityInput.addEventListener('input', (e) => {
+            if (selectedText) {
+                selectedText.opacity = parseInt(e.target.value) / 100;
+                draw();
+            }
+        });
+        
+        // 刪除選取的文字
+        deleteBtn.addEventListener('click', () => {
+            if (!selectedText) {
+                showMessage('請先點擊選擇一個文字');
+                return;
+            }
+            // 使用 filter 方法過濾掉選取的文字物件
+            textObjects = textObjects.filter(obj => obj !== selectedText);
+            selectedText = null;
+            textInput.value = '';
+            draw();
+            showMessage('文字已刪除');
+        });
+
+        // 下載功能
+        downloadPngBtn.addEventListener('click', () => {
+            if (!backgroundImage) return showMessage('請先上傳圖片');
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = 'edited_image.png';
+            link.click();
+        });
+
+        downloadJpgBtn.addEventListener('click', () => {
+            if (!backgroundImage) return showMessage('請先上傳圖片');
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9); // 0.9 質量
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = 'edited_image.jpg';
+            link.click();
+        });
+
+        downloadPdfBtn.addEventListener('click', () => {
+            if (!backgroundImage) return showMessage('請先上傳圖片');
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: canvas.width > canvas.height ? 'l' : 'p',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+
+            // 將 canvas 內容作為圖片加入 PDF
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
+            doc.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+
+            doc.save('edited_document.pdf');
+        });
+
+        // 初始化畫布
+        draw();
+    </script>
+</body>
+</html>
